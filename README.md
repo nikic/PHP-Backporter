@@ -13,3 +13,9 @@ ToDo
 * Namespaces
 * Lambda functions
 * Closures
+* Dynamic scope resolution (`$className::`)
+* Late static binding
+* Short ternary operator
+* `__callStatic` magic
+* `__invoke` magic
+* ...
