@@ -1,0 +1,11 @@
+$f = function($a, $b) { return $a + $b; };
+echo $f(1, 2);
+---
+$f = 'lambda_%x';
+echo $f(1, 2);
+function lambda_%x($a, $b)
+{
+    return $a + $b;
+}
+---
+3

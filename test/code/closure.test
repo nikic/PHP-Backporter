@@ -1,0 +1,31 @@
+$closures = array();
+for ($b = 0; $b <= 10; ++$b) {
+    $closures[] = function($a) use($b) { return $a + $b; };
+}
+
+foreach ($closures as $closure) {
+    echo call_user_func($closure, 10), ' ';
+}
+---
+$closures = array();
+for ($b = 0;$b <= 10;++$b) {
+    $closures[] = array(new Closure_%x(array('b' => $b)), 'call');
+}
+foreach ($closures as $closure) {
+    echo call_user_func($closure, 10), ' ';
+}
+class Closure_%x
+{
+    private $uses;
+    public function __construct(array $uses)
+    {
+        $this->uses = $uses;
+    }
+    public function call($a)
+    {
+        extract($this->uses, EXTR_REFS);
+        return $a + $b;
+    }
+}
+---
+10 11 12 13 14 15 16 17 18 19 20

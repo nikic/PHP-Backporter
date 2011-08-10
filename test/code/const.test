@@ -1,0 +1,16 @@
+const FOO = 'BAR';
+echo FOO;
+---
+define('FOO', 'BAR');
+echo FOO;
+---
+BAR
+-----
+const ONE = 1, TWO = 2;
+echo ONE + TWO;
+---
+define('ONE', 1);
+define('TWO', 2);
+echo ONE + TWO;
+---
+3
