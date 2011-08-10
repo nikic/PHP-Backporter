@@ -4,14 +4,14 @@ PHP Backporter
 Currently supported
 -------------------
 
-* Conversion of `const` statements into `define` function calls
-* Conversion of `__DIR__` to `dirname(__FILE__)`
+* `const` statements (converted into `define` function calls)
+* `__DIR__` magic constant (converted into `dirname(__FILE__)`)
+* Lambda functions (converted into normal functions)
 
 ToDo
 ----
 
 * Namespaces
-* Lambda functions
 * Closures
 * Dynamic scope resolution (`$className::`)
 * Late static binding
