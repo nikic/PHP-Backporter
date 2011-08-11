@@ -8,7 +8,7 @@ foreach ($closures as $closure) {
 }
 ---
 $closures = array();
-for ($b = 0;$b <= 10;++$b) {
+for ($b = 0; $b <= 10; ++$b) {
     $closures[] = array(new Closure_%x(array('b' => $b)), 'call');
 }
 foreach ($closures as $closure) {

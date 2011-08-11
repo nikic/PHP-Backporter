@@ -38,11 +38,11 @@ class PHPBackporter_Converter_Closure extends PHPParser_NodeVisitorAbstract
             // generate uses array
             $uses = array();
             foreach ($node->useVars as $use) {
-                $uses[] = new PHPParser_Node_Expr_ArrayItem(array(
-                    'key'   => new PHPParser_Node_Scalar_String($use->var),
-                    'value' => new PHPParser_Node_Variable($use->var),
-                    'byRef' => $use->byRef
-                ));
+                $uses[] = new PHPParser_Node_Expr_ArrayItem(
+                    new PHPParser_Node_Scalar_String($use->var),
+                    new PHPParser_Node_Variable($use->var),
+                    $use->byRef
+                );
             }
 
             // generate class from closure
@@ -74,13 +74,12 @@ class PHPBackporter_Converter_Closure extends PHPParser_NodeVisitorAbstract
                             ))
                         ),
                         'stmts'  => array(
-                            new PHPParser_Node_Expr_Assign(array(
-                                'var'  => new PHPParser_Node_Expr_PropertyFetch(array(
-                                    'var'  => new PHPParser_Node_Variable('this'),
-                                    'name' => 'uses'
-                                )),
-                                'expr' => new PHPParser_Node_Variable('uses')
-                            ))
+                            new PHPParser_Node_Expr_Assign(
+                                new PHPParser_Node_Expr_PropertyFetch(
+                                    new PHPParser_Node_Variable('this'), 'uses'
+                                ),
+                                new PHPParser_Node_Variable('uses')
+                            )
                         )
                     )),
                     new PHPParser_Node_Stmt_ClassMethod(array(
@@ -90,18 +89,17 @@ class PHPBackporter_Converter_Closure extends PHPParser_NodeVisitorAbstract
                         'params' => $node->params,
                         'stmts'  => array_merge(
                             array(
-                                new PHPParser_Node_Expr_FuncCall(array(
-                                    'func' => new PHPParser_Node_Name('extract'),
-                                    'args' => array(
-                                        new PHPParser_Node_Expr_PropertyFetch(array(
-                                            'var'  => new PHPParser_Node_Variable('this'),
-                                            'name' => 'uses'
-                                        )),
-                                        new PHPParser_Node_Expr_ConstFetch(array(
-                                            'name' => new PHPParser_Node_Name('EXTR_REFS')
-                                        ))
+                                new PHPParser_Node_Expr_FuncCall(
+                                    new PHPParser_Node_Name('extract'),
+                                    array(
+                                        new PHPParser_Node_Expr_PropertyFetch(
+                                            new PHPParser_Node_Variable('this'), 'uses'
+                                        ),
+                                        new PHPParser_Node_Expr_ConstFetch(
+                                            new PHPParser_Node_Name('EXTR_REFS')
+                                        )
                                     )
-                                ))
+                                )
                             ),
                             $node->stmts
                         )
@@ -111,24 +109,18 @@ class PHPBackporter_Converter_Closure extends PHPParser_NodeVisitorAbstract
 
             // return callable array
             $node = new PHPParser_Node_Expr_Array(array(
-                'items' => array(
-                    new PHPParser_Node_Expr_ArrayItem(array(
-                        'key'   => null,
-                        'value' => new PHPParser_Node_Expr_New(array(
-                            'class' => new PHPParser_Node_Name($name),
-                            'args'  => array(
-                                new PHPParser_Node_Expr_Array(array(
-                                    'items' => $uses
-                                ))
-                            )
-                        )),
-                        'byRef' => false
-                    )),
-                    new PHPParser_Node_Expr_ArrayItem(array(
-                        'key'   => null,
-                        'value' => new PHPParser_Node_Scalar_String('call'),
-                        'byRef' => false
-                    )),
+                new PHPParser_Node_Expr_ArrayItem(
+                    null,
+                    new PHPParser_Node_Expr_New(
+                        new PHPParser_Node_Name($name),
+                        array(
+                            new PHPParser_Node_Expr_Array($uses)
+                        )
+                    )
+                ),
+                new PHPParser_Node_Expr_ArrayItem(
+                    null,
+                    new PHPParser_Node_Scalar_String('call')
                 )
             ));
         }
