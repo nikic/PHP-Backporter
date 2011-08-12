@@ -1,0 +1,51 @@
+namespace A {
+    class B {
+        public static function call() {
+            return 'Foo Bar';
+        }
+    }
+
+    function C() {
+        return 'Bar Foo';
+    }
+
+    const ABC = 'DEF';
+    define('GHI', 'JKL');
+
+    echo __NAMESPACE__, "\n";
+
+    echo B::call(), "\n";
+    echo C(), "\n";
+    echo ABC, "\n";
+    echo GHI, "\n";
+}
+---
+class A_B
+{
+    public static function call()
+    {
+        return 'Foo Bar';
+    }
+}
+function A_C()
+{
+    return 'Bar Foo';
+}
+define('A_ABC', 'DEF');
+define('A_GHI', 'JKL');
+echo 'A', '
+';
+echo A_B::call(), '
+';
+echo A_C(), '
+';
+echo A_ABC, '
+';
+echo A_GHI, '
+';
+---
+A
+Foo Bar
+Bar Foo
+DEF
+JKL

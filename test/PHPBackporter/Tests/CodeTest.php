@@ -14,6 +14,7 @@ class PHPBackporter_Tests_CodeTest extends PHPUnit_Framework_TestCase
         $traverser->addVisitor(new PHPBackporter_Converter_Const);
         $traverser->addVisitor(new PHPBackporter_Converter_Lambda);
         $traverser->addVisitor(new PHPBackporter_Converter_Closure);
+        $traverser->addVisitor(new PHPBackporter_Converter_Namespace);
 
         $stmts = $parser->parse(new PHPParser_Lexer('<?php ' . $originalCode));
 
