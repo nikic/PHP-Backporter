@@ -20,9 +20,9 @@ by a callable array. Such arrays aren't directly callable before PHP 5.4.
 
 ### Namespaces ###
 
-The current namespaces implementation is very limited. Most notable it assumes all unqualified uses
+The current namespaces implementation is very limited. Most notably it assumes all unqualified uses
 of constants and functions are global if a global constant with such a name is defined and local if
-it is not. Additionally no dynamic constructs are modified.
+it is not. Additionally many dynamic constructs do not work yet.
 
 ToDo
 ----

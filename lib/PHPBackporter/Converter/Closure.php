@@ -29,7 +29,7 @@ class PHPBackporter_Converter_Closure extends PHPParser_NodeVisitorAbstract
     public function leaveNode(PHPParser_NodeAbstract &$node) {
         if ($node instanceof PHPParser_Node_Expr_LambdaFunc) {
             // only closures, no lambdas
-            if (empty($node->useVars)) {
+            if (empty($node->uses)) {
                 return;
             }
 
@@ -37,10 +37,10 @@ class PHPBackporter_Converter_Closure extends PHPParser_NodeVisitorAbstract
 
             // generate uses array
             $uses = array();
-            foreach ($node->useVars as $use) {
+            foreach ($node->uses as $use) {
                 $uses[] = new PHPParser_Node_Expr_ArrayItem(
                     new PHPParser_Node_Scalar_String($use->var),
-                    new PHPParser_Node_Variable($use->var),
+                    new PHPParser_Node_Expr_Variable($use->var),
                     $use->byRef
                 );
             }
@@ -66,19 +66,16 @@ class PHPBackporter_Converter_Closure extends PHPParser_NodeVisitorAbstract
                         'byRef'  => false,
                         'name'   => '__construct',
                         'params' => array(
-                            new PHPParser_Node_Stmt_FuncParam(array(
-                                'type'    => 'array',
-                                'byRef'   => false,
-                                'name'    => 'uses',
-                                'default' => null
-                            ))
+                            new PHPParser_Node_Param(
+                                'uses', null, 'array'
+                            )
                         ),
                         'stmts'  => array(
                             new PHPParser_Node_Expr_Assign(
                                 new PHPParser_Node_Expr_PropertyFetch(
-                                    new PHPParser_Node_Variable('this'), 'uses'
+                                    new PHPParser_Node_Expr_Variable('this'), 'uses'
                                 ),
-                                new PHPParser_Node_Variable('uses')
+                                new PHPParser_Node_Expr_Variable('uses')
                             )
                         )
                     )),
@@ -93,7 +90,7 @@ class PHPBackporter_Converter_Closure extends PHPParser_NodeVisitorAbstract
                                     new PHPParser_Node_Name('extract'),
                                     array(
                                         new PHPParser_Node_Expr_PropertyFetch(
-                                            new PHPParser_Node_Variable('this'), 'uses'
+                                            new PHPParser_Node_Expr_Variable('this'), 'uses'
                                         ),
                                         new PHPParser_Node_Expr_ConstFetch(
                                             new PHPParser_Node_Name('EXTR_REFS')

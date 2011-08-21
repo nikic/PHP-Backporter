@@ -20,12 +20,16 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
     public function enterNode(PHPParser_NodeAbstract &$node) {
         if ($node instanceof PHPParser_Node_Stmt_Namespace) {
             $this->namespace = $node->name;
+            $this->aliases   = array();
         } elseif ($node instanceof PHPParser_Node_Stmt_UseUse) {
             if (isset($this->aliases[$node->alias])) {
-                throw new PHPParser_Error(sprintf(
-                    'Cannot use %s as %s because the name is already in use',
-                    $node->name, $node->alias
-                ));
+                throw new PHPParser_Error(
+                    sprintf(
+                        'Cannot use %s as %s because the name is already in use',
+                        $node->name, $node->alias
+                    ),
+                    $node->getLine()
+                );
             }
 
             $this->aliases[$node->alias] = $node->name;
@@ -36,7 +40,6 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
         if ($node instanceof PHPParser_Node_Stmt_Class
             || $node instanceof PHPParser_Node_Stmt_Interface
             || $node instanceof PHPParser_Node_Stmt_Func
-            || $node instanceof PHPParser_Node_Stmt_ConstConst
         ) {
             $this->rewriteDefinition($node->name);
 
@@ -65,22 +68,10 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
         } elseif ($node instanceof PHPParser_Node_Expr_FuncCall) {
             $this->rewriteLookup($node->name, T_FUNCTION);
 
-            if ('define' == $node->name) {
-                // missing first argument
-                if (count($node->args) < 2) {
-                    throw new PHPParser_Error('define() is expecting at least two arguments', $node->getLine());
-                }
-
-                // dynamic definition TODO
-                if (!$node->args[0]->value instanceof PHPParser_Node_Scalar_String) {
-                    return;
-                }
-
-                $this->rewriteDefinition($node->args[0]->value->value);
-            }
+            return $this->rewriteSpecialFunctions($node);
         } elseif ($node instanceof PHPParser_Node_Expr_ConstFetch) {
             $this->rewriteLookup($node->name, T_CONST);
-        } elseif ($node instanceof PHPParser_Node_Stmt_FuncParam) {
+        } elseif ($node instanceof PHPParser_Node_Param) {
             $this->rewriteLookup($node->type, T_CLASS);
         // rewrite __NAMESPACE__
         } elseif ($node instanceof PHPParser_Node_Scalar_NSConst) {
@@ -105,6 +96,11 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
     protected function rewriteLookup(&$name, $type) {
         // requires dynamic resolution TODO
         if (!$name instanceof PHPParser_Node_Name) {
+            return;
+        }
+
+        // don't try to resolve special class names
+        if (T_CLASS == $type && in_array((string) $name, array('self', 'parent', 'static'))) {
             return;
         }
 
@@ -151,5 +147,106 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
         // finally just replace the namespace separators with underscores
         $name->set($name->toString('_'));
         $name->type = PHPParser_Node_Name::NORMAL;
+    }
+
+    protected static $classNameFuncs = array(
+        'class_exists'      => 0,
+        'interface_exists'  => 0,
+        'spl_autoload_call' => 0,
+    );
+
+    protected function rewriteSpecialFunctions(PHPParser_Node_Expr_FuncCall &$node) {
+        // dynamic function name TODO
+        if (!$node->name instanceof PHPParser_Node_Name) {
+            return;
+        }
+
+        if ('define' == $node->name) {
+            return $this->rewriteDefineFunction($node);
+        } elseif ('spl_autoload_register' == $node->name) {
+            return $this->rewriteSplAutoloadRegisterFunction($node);
+        } elseif (isset(self::$classNameFuncs[(string) $node->name])) {
+            $argN = self::$classNameFuncs[(string) $node->name];
+
+            if (isset($node->args[$argN])) {
+                $node->args[$argN] = new PHPParser_Node_Expr_FuncCall(
+                    new PHPParser_Node_Name('strtr'),
+                    array(
+                        new PHPParser_Node_Expr_FuncCallArg(
+                            $node->args[$argN]
+                        ),
+                        new PHPParser_Node_Expr_FuncCallArg(
+                            new PHPParser_Node_Scalar_String('\\')
+                        ),
+                        new PHPParser_Node_Expr_FuncCallArg(
+                            new PHPParser_Node_Scalar_String('_')
+                        )
+                    )
+                );
+            }
+        }
+    }
+
+    // rewrites constants defined using the define() function
+    protected function rewriteDefineFunction(PHPParser_Node_Expr_FuncCall &$node) {
+        // missing first argument
+        if (count($node->args) < 2) {
+            throw new PHPParser_Error('define() is expecting at least two arguments', $node->getLine());
+        }
+
+        // dynamic definition TODO
+        if (!$node->args[0]->value instanceof PHPParser_Node_Scalar_String) {
+            return;
+        }
+
+        $this->rewriteDefinition($node->args[0]->value->value);
+    }
+
+    // spl_autoload_register callbacks need to be passed the class name
+    // with \ instead of _
+    protected function rewriteSplAutoloadRegisterFunction(PHPParser_Node_Expr_FuncCall &$node) {
+        if (!isset($node->args[0])) {
+            return;
+        }
+
+        $callbackVarName = uniqid('callback_');
+        $assignment = new PHPParser_Node_Expr_Assign(
+            new PHPParser_Node_Expr_Variable($callbackVarName),
+            $node->args[0]
+        );
+        $node->args[0] = new PHPParser_Node_Expr_LambdaFunc(
+            array(
+                new PHPParser_Node_Stmt_Return(array(
+                    'expr' => new PHPParser_Node_Expr_FuncCall(
+                        new PHPParser_Node_Name('call_user_func'),
+                        array(
+                            new PHPParser_Node_Expr_FuncCallArg(
+                                new PHPParser_Node_Expr_Variable($callbackVarName)
+                            ),
+                            new PHPParser_Node_Expr_FuncCallArg(
+                                new PHPParser_Node_Expr_FuncCall(
+                                    new PHPParser_Node_Name('strtr'),
+                                    array(
+                                        new PHPParser_Node_Expr_FuncCallArg(
+                                            new PHPParser_Node_Expr_Variable('class')
+                                        ),
+                                        new PHPParser_Node_Expr_FuncCallArg(
+                                            new PHPParser_Node_Scalar_String('_')
+                                        ),
+                                        new PHPParser_Node_Expr_FuncCallArg(
+                                            new PHPParser_Node_Scalar_String('\\')
+                                        ),
+                                    )
+                                )
+                            )
+                        )
+                    )
+                ))
+            ),
+            array(new PHPParser_Node_Param('class')),
+            array(new PHPParser_Node_Expr_LambdaFuncUse($callbackVarName))
+        );
+
+        return array($assignment, $node);
     }
 }

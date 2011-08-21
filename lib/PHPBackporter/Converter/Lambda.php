@@ -20,7 +20,7 @@ class PHPBackporter_Converter_Lambda extends PHPParser_NodeVisitorAbstract
     public function leaveNode(PHPParser_NodeAbstract &$node) {
         if ($node instanceof PHPParser_Node_Expr_LambdaFunc) {
             // only lambdas, no closures
-            if (!empty($node->useVars)) {
+            if (!empty($node->uses)) {
                 return;
             }
 
