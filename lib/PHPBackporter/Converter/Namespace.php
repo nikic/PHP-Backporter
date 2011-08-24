@@ -220,7 +220,7 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
                     } else {
                         $valueVar = null;
                         if (!$arg->value instanceof PHPParser_Node_Expr_Variable) {
-                            $valueVar = new PHPParser_Node_Expr_Variable(uniqid('value_'));
+                            $valueVar = new PHPParser_Node_Expr_Variable(uniqid('_value_'));
                         }
 
                         $arg->value = new PHPParser_Node_Expr_Ternary(
@@ -281,7 +281,7 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
             return;
         }
 
-        $callbackVarName = uniqid('callback_');
+        $callbackVarName = uniqid('_callback_');
         $assignment = new PHPParser_Node_Expr_Assign(
             new PHPParser_Node_Expr_Variable($callbackVarName),
             $node->args[0]

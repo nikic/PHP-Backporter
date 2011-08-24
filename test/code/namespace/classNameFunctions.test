@@ -28,7 +28,7 @@ if (property_exists('B_C', 'D')) {
 if (property_exists(is_string($className) ? strtr($className, '\\', '_') : $className, 'D')) {
     echo 'OK';
 }
-if (property_exists(is_string(($value_%x = new B_C())) ? strtr($value_%x, '\\', '_') : $value_%x, 'D')) {
+if (property_exists(is_string(($_value_%x = new B_C())) ? strtr($_value_%x, '\\', '_') : $_value_%x, 'D')) {
     echo 'OK';
 }
 ---

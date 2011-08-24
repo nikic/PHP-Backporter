@@ -5,3 +5,5 @@ PHPParser_Autoloader::register();
 
 require_once dirname(__FILE__) . '/../lib/PHPBackporter/Autoloader.php';
 PHPBackporter_Autoloader::register();
+
+require_once dirname(__FILE__) . '/../runtime.php';

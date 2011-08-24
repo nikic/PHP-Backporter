@@ -24,7 +24,7 @@ class PHPBackporter_Converter_Lambda extends PHPParser_NodeVisitorAbstract
                 return;
             }
 
-            $name = uniqid('lambda_');
+            $name = uniqid('_lambda_');
 
             // generate real function from lambda
             $this->lambdas[] = new PHPParser_Node_Stmt_Func(array(

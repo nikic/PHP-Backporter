@@ -33,7 +33,7 @@ class PHPBackporter_Converter_Closure extends PHPParser_NodeVisitorAbstract
                 return;
             }
 
-            $name = uniqid('Closure_');
+            $name = uniqid('_Closure_');
 
             // generate uses array
             $uses = array();
@@ -49,36 +49,9 @@ class PHPBackporter_Converter_Closure extends PHPParser_NodeVisitorAbstract
             $this->closures[] = new PHPParser_Node_Stmt_Class(array(
                 'type'       => 0,
                 'name'       => $name,
-                'extends'    => null,
+                'extends'    => new PHPParser_Node_Name('_Closure'),
                 'implements' => array(),
                 'stmts'      => array(
-                    new PHPParser_Node_Stmt_Property(array(
-                        'type'  => PHPParser_Node_Stmt_Class::MODIFIER_PRIVATE,
-                        'props' => array(
-                            new PHPParser_Node_Stmt_PropertyProperty(array(
-                                'name'    => 'uses',
-                                'default' => null
-                            ))
-                        )
-                    )),
-                    new PHPParser_Node_Stmt_ClassMethod(array(
-                        'type'   => PHPParser_Node_Stmt_Class::MODIFIER_PUBLIC,
-                        'byRef'  => false,
-                        'name'   => '__construct',
-                        'params' => array(
-                            new PHPParser_Node_Param(
-                                'uses', null, 'array'
-                            )
-                        ),
-                        'stmts'  => array(
-                            new PHPParser_Node_Expr_Assign(
-                                new PHPParser_Node_Expr_PropertyFetch(
-                                    new PHPParser_Node_Expr_Variable('this'), 'uses'
-                                ),
-                                new PHPParser_Node_Expr_Variable('uses')
-                            )
-                        )
-                    )),
                     new PHPParser_Node_Stmt_ClassMethod(array(
                         'type'   => PHPParser_Node_Stmt_Class::MODIFIER_PUBLIC,
                         'byRef'  => false,

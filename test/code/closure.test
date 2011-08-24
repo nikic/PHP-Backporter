@@ -9,18 +9,13 @@ foreach ($closures as $closure) {
 ---
 $closures = array();
 for ($b = 0; $b <= 10; ++$b) {
-    $closures[] = array(new Closure_%x(array('b' => $b)), 'call');
+    $closures[] = array(new _Closure_%x(array('b' => $b)), 'call');
 }
 foreach ($closures as $closure) {
     echo call_user_func($closure, 10), ' ';
 }
-class Closure_%x
+class _Closure_%x extends _Closure
 {
-    private $uses;
-    public function __construct(array $uses)
-    {
-        $this->uses = $uses;
-    }
     public function call($a)
     {
         extract($this->uses, EXTR_REFS);
