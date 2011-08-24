@@ -1,0 +1,35 @@
+namespace B {
+    class C { public $D = 'E'; }
+
+    $className = 'B\\C';
+
+    if (class_exists('B\\C'))     echo 'OK';
+    if (class_exists($className)) echo 'OK';
+
+    if (property_exists('B\\C', 'D'))     echo 'OK';
+    if (property_exists($className, 'D')) echo 'OK';
+    if (property_exists(new \B\C, 'D'))   echo 'OK';
+}
+---
+class B_C
+{
+    public $D = 'E';
+}
+$className = 'B\\C';
+if (class_exists('B_C')) {
+    echo 'OK';
+}
+if (class_exists(strtr($className, '\\', '_'))) {
+    echo 'OK';
+}
+if (property_exists('B_C', 'D')) {
+    echo 'OK';
+}
+if (property_exists(is_string($className) ? strtr($className, '\\', '_') : $className, 'D')) {
+    echo 'OK';
+}
+if (property_exists(is_string(($value_%x = new B_C())) ? strtr($value_%x, '\\', '_') : $value_%x, 'D')) {
+    echo 'OK';
+}
+---
+OKOKOKOKOK

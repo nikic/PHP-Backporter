@@ -1,0 +1,27 @@
+namespace A {
+    spl_autoload_register(function($class) { echo $class; });
+    spl_autoload_call('A\\B\\C');
+}
+---
+$callback_%x = 'lambda_%x';
+spl_autoload_register(array(new Closure_%x(array('callback_%x' => $callback_%x)), 'call'));
+spl_autoload_call('A_B_C');
+function lambda_%x($class)
+{
+    echo $class;
+}
+class Closure_%x
+{
+    private $uses;
+    public function __construct(array $uses)
+    {
+        $this->uses = $uses;
+    }
+    public function call($class)
+    {
+        extract($this->uses, EXTR_REFS);
+        return call_user_func($callback_%x, strtr($class, '_', '\\'));
+    }
+}
+---
+A\B\C

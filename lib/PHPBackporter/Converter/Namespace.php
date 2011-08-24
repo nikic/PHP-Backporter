@@ -149,10 +149,30 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
         $name->type = PHPParser_Node_Name::NORMAL;
     }
 
-    protected static $classNameFuncs = array(
-        'class_exists'      => 0,
-        'interface_exists'  => 0,
-        'spl_autoload_call' => 0,
+    protected static $classFuncs = array(
+        'class_exists'            => 0,
+        'interface_exists'        => 0,
+        'is_a'                    => 1,
+        'is_subclass_of'          => 1,
+        'mysql_fetch_object'      => 1,
+        'simplexml_import_dom'    => 1,
+        'simplexml_load_file'     => 1,
+        'simplexml_load_string'   => 1,
+        'spl_autoload'            => 0,
+        'spl_autoload_call'       => 0,
+        'sqlite_fetch_object'     => 1,
+        'stream_filter_register'  => 1,
+        'stream_register_wrapper' => 1,
+        'stream_wrapper_register' => 1,
+    );
+
+    protected static $objectOrClassFuncs = array(
+        'get_class_vars'    => 0,
+        'get_class_methods' => 0,
+        'get_parent_class'  => 0,
+        'is_a'              => 0,
+        'is_subclass_of'    => 0,
+        'property_exists'   => 0,
     );
 
     protected function rewriteSpecialFunctions(PHPParser_Node_Expr_FuncCall &$node) {
@@ -165,24 +185,76 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
             return $this->rewriteDefineFunction($node);
         } elseif ('spl_autoload_register' == $node->name) {
             return $this->rewriteSplAutoloadRegisterFunction($node);
-        } elseif (isset(self::$classNameFuncs[(string) $node->name])) {
-            $argN = self::$classNameFuncs[(string) $node->name];
+        } else {
+            if (isset(self::$classFuncs[(string) $node->name])) {
+                $argN = self::$classFuncs[(string) $node->name];
+                if (isset($node->args[$argN])) {
+                    $arg = $node->args[$argN];
+                    if ($arg->value instanceof PHPParser_Node_Scalar_String) {
+                        $arg->value->value = strtr($arg->value->value, '\\', '_');
+                    } else {
+                        $arg->value = new PHPParser_Node_Expr_FuncCall(
+                            new PHPParser_Node_Name('strtr'),
+                            array(
+                                 new PHPParser_Node_Expr_FuncCallArg(
+                                     $arg->value
+                                 ),
+                                 new PHPParser_Node_Expr_FuncCallArg(
+                                     new PHPParser_Node_Scalar_String('\\')
+                                 ),
+                                 new PHPParser_Node_Expr_FuncCallArg(
+                                     new PHPParser_Node_Scalar_String('_')
+                                 )
+                            )
+                        );
+                    }
+                }
+            }
 
-            if (isset($node->args[$argN])) {
-                $node->args[$argN] = new PHPParser_Node_Expr_FuncCall(
-                    new PHPParser_Node_Name('strtr'),
-                    array(
-                        new PHPParser_Node_Expr_FuncCallArg(
-                            $node->args[$argN]
-                        ),
-                        new PHPParser_Node_Expr_FuncCallArg(
-                            new PHPParser_Node_Scalar_String('\\')
-                        ),
-                        new PHPParser_Node_Expr_FuncCallArg(
-                            new PHPParser_Node_Scalar_String('_')
-                        )
-                    )
-                );
+            if (isset(self::$objectOrClassFuncs[(string) $node->name])) {
+                $argN = self::$objectOrClassFuncs[(string) $node->name];
+                if (isset($node->args[$argN])) {
+                    $arg = $node->args[$argN];
+                    if ($arg->value instanceof PHPParser_Node_Scalar_String) {
+                        $arg->value->value = strtr($arg->value->value, '\\', '_');
+                    } else {
+                        $valueVar = null;
+                        if (!$arg->value instanceof PHPParser_Node_Expr_Variable) {
+                            $valueVar = new PHPParser_Node_Expr_Variable(uniqid('value_'));
+                        }
+
+                        $arg->value = new PHPParser_Node_Expr_Ternary(
+                            new PHPParser_Node_Expr_FuncCall(
+                                new PHPParser_Node_Name('is_string'),
+                                array(
+                                    new PHPParser_Node_Expr_FuncCallArg(
+                                        $valueVar
+                                        ? new PHPParser_Node_Expr_Assign(
+                                            $valueVar,
+                                            $node->args[$argN]->value
+                                        )
+                                        : $node->args[$argN]->value
+                                    )
+                                )
+                            ),
+                            new PHPParser_Node_Expr_FuncCall(
+                                new PHPParser_Node_Name('strtr'),
+                                array(
+                                     new PHPParser_Node_Expr_FuncCallArg(
+                                         $valueVar ? $valueVar : $arg->value
+                                     ),
+                                     new PHPParser_Node_Expr_FuncCallArg(
+                                         new PHPParser_Node_Scalar_String('\\')
+                                     ),
+                                     new PHPParser_Node_Expr_FuncCallArg(
+                                         new PHPParser_Node_Scalar_String('_')
+                                     )
+                                )
+                            ),
+                            $valueVar ? $valueVar : $arg->value
+                        );
+                    }
+                }
             }
         }
     }
