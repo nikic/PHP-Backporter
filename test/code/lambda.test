@@ -2,7 +2,7 @@ $f = function($a, $b) { return $a + $b; };
 echo $f(1, 2);
 ---
 $f = '_lambda_%x';
-echo $f(1, 2);
+echo ${'_value_%x' . !($_value_%x = is_string($f) ? strtr($f, '\\', '_') : $f)}(1, 2);
 function _lambda_%x($a, $b)
 {
     return $a + $b;

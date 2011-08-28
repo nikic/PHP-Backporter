@@ -12,9 +12,62 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
      */
     protected $aliases;
 
+    /**
+     * @var array Hash of internal functions / constants
+     */
+    protected $internals;
+
+    protected static $classFuncs = array(
+        'class_exists'            => 0,
+        'interface_exists'        => 0,
+        'is_a'                    => 1,
+        'is_subclass_of'          => 1,
+        'mysql_fetch_object'      => 1,
+        'simplexml_import_dom'    => 1,
+        'simplexml_load_file'     => 1,
+        'simplexml_load_string'   => 1,
+        'spl_autoload'            => 0,
+        'spl_autoload_call'       => 0,
+        'sqlite_fetch_object'     => 1,
+        'stream_filter_register'  => 1,
+        'stream_register_wrapper' => 1,
+        'stream_wrapper_register' => 1,
+    );
+
+    protected static $objectOrClassFuncs = array(
+        'get_class_vars'    => 0,
+        'get_class_methods' => 0,
+        'get_parent_class'  => 0,
+        'is_a'              => 0,
+        'is_subclass_of'    => 0,
+        'property_exists'   => 0,
+    );
+
+    protected static $classReturnFuncs = array(
+        'get_class'        => true,
+        'get_parent_class' => true,
+    );
+
+    protected static $specialClasses = array(
+        'ReflectionClass'  => '_ReflectionClass',
+        'ReflectionObject' => '_ReflectionObject',
+    );
+
     public function beforeTraverse(&$node) {
         $this->namespace = null;
         $this->aliases   = array();
+
+        $functions = get_defined_functions();
+        $functions = $functions['internal'];
+
+        $consts = get_defined_constants(true);
+        unset($consts['user']);
+        $consts = array_keys(call_user_func_array('array_merge', $consts));
+
+        $this->internals = array(
+            T_FUNCTION => array_change_key_case(array_fill_keys($functions, true), CASE_LOWER),
+            T_CONST    => array_change_key_case(array_fill_keys($consts,    true), CASE_LOWER),
+        );
     }
 
     public function enterNode(PHPParser_NodeAbstract &$node) {
@@ -43,21 +96,21 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
         ) {
             $this->rewriteDefinition($node->name);
 
-            // rewrite lookups in extends and implements
             if ($node instanceof PHPParser_Node_Stmt_Class) {
-                $this->rewriteLookup($node->extends, T_CLASS);
+                if (null !== $node->extends) {
+                    $this->rewriteStaticClassLookup($node->extends);
+                }
 
                 foreach ($node->implements as $interface) {
-                    $this->rewriteLookup($interface, T_CLASS);
+                    $this->rewriteStaticClassLookup($interface);
                 }
             }
 
             if ($node instanceof PHPParser_Node_Stmt_Interface) {
                 foreach ($node->extends as $interface) {
-                    $this->rewriteLookup($interface, T_CLASS);
+                    $this->rewriteStaticClassLookup($interface);
                 }
             }
-        // rewrite lookups
         } elseif ($node instanceof PHPParser_Node_Expr_StaticCall
             || $node instanceof PHPParser_Node_Expr_StaticPropertyFetch
             || $node instanceof PHPParser_Node_Expr_ClassConstFetch
@@ -71,8 +124,10 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
             return $this->rewriteSpecialFunctions($node);
         } elseif ($node instanceof PHPParser_Node_Expr_ConstFetch) {
             $this->rewriteLookup($node->name, T_CONST);
-        } elseif ($node instanceof PHPParser_Node_Param) {
-            $this->rewriteLookup($node->type, T_CLASS);
+        } elseif ($node instanceof PHPParser_Node_Param
+                  && $node->type instanceof PHPParser_Node_Name
+        ) {
+            $this->rewriteStaticClassLookup($node->type);
         // rewrite __NAMESPACE__
         } elseif ($node instanceof PHPParser_Node_Scalar_NSConst) {
             $node = new PHPParser_Node_Scalar_String(
@@ -94,51 +149,53 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
     }
 
     protected function rewriteLookup(&$name, $type) {
-        // requires dynamic resolution TODO
         if (!$name instanceof PHPParser_Node_Name) {
-            return;
+            $name = $this->createInlineExpr($this->createFromNamespacedNode($name, false));
+        } elseif (T_CLASS === $type) {
+            $this->rewriteStaticClassLookup($name);
+        } else {
+            $this->rewriteStaticOtherLookup($name, $type);
         }
+    }
 
+    protected function rewriteStaticClassLookup(PHPParser_Node_Name &$name) {
         // don't try to resolve special class names
-        if (T_CLASS == $type && in_array((string) $name, array('self', 'parent', 'static'))) {
+        if (in_array((string) $name, array('self', 'parent', 'static'))) {
             return;
         }
 
-        // resolve relative namespaces
-        if ($name->isRelative()) {
-            if (null !== $this->namespace) {
-                $name->prepend($this->namespace);
-            }
-
-            $name->type = PHPParser_Node_Name::FULLY_QUALIFIED;
-        } elseif ($name->isQualified()) {
-            // if the first part is a known alias replace it
-            if (isset($this->aliases[$name->getFirst()])) {
+        // leave the fully qualified ones alone
+        if (!$name->isFullyQualified()) {
+            // resolve aliases (for non-relative names)
+            if (!$name->isRelative() && isset($this->aliases[$name->getFirst()])) {
                 $name->setFirst($this->aliases[$name->getFirst()]);
-            // otherwise prepend current namespace
+            // if no alias exists prepend current namespace
             } elseif (null !== $this->namespace) {
                 $name->prepend($this->namespace);
             }
-
-            $name->type = PHPParser_Node_Name::FULLY_QUALIFIED;
-        // for unqualified names alias resolution is only done for classes
-        } elseif (T_CLASS == $type && $name->isUnqualified()
-                  && isset($this->aliases[$name->getFirst()])
-        ) {
-            $name->set($this->aliases[$name->getFirst()]);
-            $name->type = PHPParser_Node_Name::FULLY_QUALIFIED;
         }
 
-        // for fully qualified names or names in the global namespace no further actions required
-        if (!$name->isFullyQualified() && null !== $this->namespace) {
-            // for classes prepend the current namespace
-            // for functions and constants prepend the current namespace only if they are not
-            // defined globally (yes, global functions and constants can be redefined in a namespace.
-            // I am doing this simplification as a proper resolution would require additional runtime
-            // code.)
-            if (T_CLASS == $type
-                || (T_FUNCTION == $type && !function_exists($name))
-                || (T_CONST == $type && !defined($name))
+        // finally just replace the namespace separators with underscores
+        $name->set($name->toString('_'));
+        $name->type = PHPParser_Node_Name::NORMAL;
+
+        // and rewrite some special classes
+        if (isset(self::$specialClasses[(string) $name])) {
+            $name->set(self::$specialClasses[(string) $name]);
+        }
+    }
+
+    protected function rewriteStaticOtherLookup(PHPParser_Node_Name &$name, $type) {
+        // leave the fully qualified ones alone
+        if (!$name->isFullyQualified()) {
+            // resolve aliases for qualified names
+            if ($name->isQualified() && isset($this->aliases[$name->getFirst()])) {
+                $name->setFirst($this->aliases[$name->getFirst()]);
+            // prepend current namespace for qualified and relative names (and unqualified ones if
+            // the function/constant is not an internal one defined globally. This isn't exactly
+            // PHP's behavior, but proper resolution would require runtime code insertion.)
+            } elseif (null !== $this->namespace
+                      && (!$name->isUnqualified() || !isset($this->internals[$type][strtolower($name)]))
             ) {
                 $name->prepend($this->namespace);
             }
@@ -148,32 +205,6 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
         $name->set($name->toString('_'));
         $name->type = PHPParser_Node_Name::NORMAL;
     }
-
-    protected static $classFuncs = array(
-        'class_exists'            => 0,
-        'interface_exists'        => 0,
-        'is_a'                    => 1,
-        'is_subclass_of'          => 1,
-        'mysql_fetch_object'      => 1,
-        'simplexml_import_dom'    => 1,
-        'simplexml_load_file'     => 1,
-        'simplexml_load_string'   => 1,
-        'spl_autoload'            => 0,
-        'spl_autoload_call'       => 0,
-        'sqlite_fetch_object'     => 1,
-        'stream_filter_register'  => 1,
-        'stream_register_wrapper' => 1,
-        'stream_wrapper_register' => 1,
-    );
-
-    protected static $objectOrClassFuncs = array(
-        'get_class_vars'    => 0,
-        'get_class_methods' => 0,
-        'get_parent_class'  => 0,
-        'is_a'              => 0,
-        'is_subclass_of'    => 0,
-        'property_exists'   => 0,
-    );
 
     protected function rewriteSpecialFunctions(PHPParser_Node_Expr_FuncCall &$node) {
         // dynamic function name TODO
@@ -190,24 +221,7 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
                 $argN = self::$classFuncs[(string) $node->name];
                 if (isset($node->args[$argN])) {
                     $arg = $node->args[$argN];
-                    if ($arg->value instanceof PHPParser_Node_Scalar_String) {
-                        $arg->value->value = strtr($arg->value->value, '\\', '_');
-                    } else {
-                        $arg->value = new PHPParser_Node_Expr_FuncCall(
-                            new PHPParser_Node_Name('strtr'),
-                            array(
-                                 new PHPParser_Node_Expr_FuncCallArg(
-                                     $arg->value
-                                 ),
-                                 new PHPParser_Node_Expr_FuncCallArg(
-                                     new PHPParser_Node_Scalar_String('\\')
-                                 ),
-                                 new PHPParser_Node_Expr_FuncCallArg(
-                                     new PHPParser_Node_Scalar_String('_')
-                                 )
-                            )
-                        );
-                    }
+                    $arg->value = $this->createFromNamespacedNode($arg->value, true);
                 }
             }
 
@@ -215,46 +229,12 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
                 $argN = self::$objectOrClassFuncs[(string) $node->name];
                 if (isset($node->args[$argN])) {
                     $arg = $node->args[$argN];
-                    if ($arg->value instanceof PHPParser_Node_Scalar_String) {
-                        $arg->value->value = strtr($arg->value->value, '\\', '_');
-                    } else {
-                        $valueVar = null;
-                        if (!$arg->value instanceof PHPParser_Node_Expr_Variable) {
-                            $valueVar = new PHPParser_Node_Expr_Variable(uniqid('_value_'));
-                        }
-
-                        $arg->value = new PHPParser_Node_Expr_Ternary(
-                            new PHPParser_Node_Expr_FuncCall(
-                                new PHPParser_Node_Name('is_string'),
-                                array(
-                                    new PHPParser_Node_Expr_FuncCallArg(
-                                        $valueVar
-                                        ? new PHPParser_Node_Expr_Assign(
-                                            $valueVar,
-                                            $node->args[$argN]->value
-                                        )
-                                        : $node->args[$argN]->value
-                                    )
-                                )
-                            ),
-                            new PHPParser_Node_Expr_FuncCall(
-                                new PHPParser_Node_Name('strtr'),
-                                array(
-                                     new PHPParser_Node_Expr_FuncCallArg(
-                                         $valueVar ? $valueVar : $arg->value
-                                     ),
-                                     new PHPParser_Node_Expr_FuncCallArg(
-                                         new PHPParser_Node_Scalar_String('\\')
-                                     ),
-                                     new PHPParser_Node_Expr_FuncCallArg(
-                                         new PHPParser_Node_Scalar_String('_')
-                                     )
-                                )
-                            ),
-                            $valueVar ? $valueVar : $arg->value
-                        );
-                    }
+                    $arg->value = $this->createFromNamespacedNode($arg->value, false);
                 }
+            }
+
+            if (isset(self::$classReturnFuncs[(string) $node->name])) {
+                $node = $this->createToNamespacedNode($node, true);
             }
         }
     }
@@ -296,19 +276,9 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
                                 new PHPParser_Node_Expr_Variable($callbackVarName)
                             ),
                             new PHPParser_Node_Expr_FuncCallArg(
-                                new PHPParser_Node_Expr_FuncCall(
-                                    new PHPParser_Node_Name('strtr'),
-                                    array(
-                                        new PHPParser_Node_Expr_FuncCallArg(
-                                            new PHPParser_Node_Expr_Variable('class')
-                                        ),
-                                        new PHPParser_Node_Expr_FuncCallArg(
-                                            new PHPParser_Node_Scalar_String('_')
-                                        ),
-                                        new PHPParser_Node_Expr_FuncCallArg(
-                                            new PHPParser_Node_Scalar_String('\\')
-                                        ),
-                                    )
+                                $this->createToNamespacedNode(
+                                    new PHPParser_Node_Expr_Variable('class'),
+                                    true
                                 )
                             )
                         )
@@ -320,5 +290,97 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
         );
 
         return array($assignment, $node);
+    }
+
+    protected function createFromNamespacedNode(PHPParser_Node_Expr $node, $safe = false) {
+        // don't clutter code with functions if we can replace directly
+        if ($node instanceof PHPParser_Node_Scalar_String) {
+            return new PHPParser_Node_Scalar_String(
+                strtr($node->value, '\\', '_')
+            );
+        }
+
+        if ($safe) {
+            return new PHPParser_Node_Expr_FuncCall(
+                new PHPParser_Node_Name('strtr'),
+                array(
+                    new PHPParser_Node_Expr_FuncCallArg($node),
+                    new PHPParser_Node_Expr_FuncCallArg(new PHPParser_Node_Scalar_String('\\')),
+                    new PHPParser_Node_Expr_FuncCallArg(new PHPParser_Node_Scalar_String('_'))
+                )
+            );
+        } else {
+            list($valueVarAssign, $valueVar) = $this->createEvalOnceExpr($node);
+
+            return new PHPParser_Node_Expr_Ternary(
+                new PHPParser_Node_Expr_FuncCall(
+                    new PHPParser_Node_Name('is_string'),
+                    array(new PHPParser_Node_Expr_FuncCallArg($valueVarAssign))
+                ),
+                $this->createFromNamespacedNode($valueVar, true),
+                $valueVar
+            );
+        }
+    }
+
+    protected function createToNamespacedNode(PHPParser_Node_Expr $node, $safe = false) {
+        // don't clutter code with functions if we can replace directly
+        if ($node instanceof PHPParser_Node_Scalar_String) {
+            return new PHPParser_Node_Scalar_String(
+                strtr($node->value, '_', '\\')
+            );
+        }
+
+        if ($safe) {
+            return new PHPParser_Node_Expr_FuncCall(
+                new PHPParser_Node_Name('strtr'),
+                array(
+                    new PHPParser_Node_Expr_FuncCallArg($node),
+                    new PHPParser_Node_Expr_FuncCallArg(new PHPParser_Node_Scalar_String('_')),
+                    new PHPParser_Node_Expr_FuncCallArg(new PHPParser_Node_Scalar_String('\\'))
+                )
+            );
+        } else {
+            list($valueVarAssign, $valueVar) = $this->createEvalOnceExpr($node);
+
+            return new PHPParser_Node_Expr_Ternary(
+                new PHPParser_Node_Expr_FuncCall(
+                    new PHPParser_Node_Name('is_string'),
+                    array(new PHPParser_Node_Expr_FuncCallArg($valueVarAssign))
+                ),
+                $this->createToNamespacedNode($valueVar, true),
+                $valueVar
+            );
+        }
+    }
+
+    // returns array where the first element should be used on the first use of the expression
+    // and the second element on all further uses
+    protected function createEvalOnceExpr(PHPParser_Node_Expr $node) {
+        // for variables don't generate additional variable assignments
+        if ($node instanceof PHPParser_Node_Expr_Variable) {
+            return array($node, $node);
+        } else {
+            $valueVar       = new PHPParser_Node_Expr_Variable(uniqid('_value_'));
+            $valueVarAssign = new PHPParser_Node_Expr_Assign($valueVar, $node);
+
+            return array($valueVarAssign, $valueVar);
+        }
+    }
+
+    // creates nodes of type ${'_value_%'.!$_value_%=$1}
+    protected function createInlineExpr(PHPParser_Node_Expr $node) {
+        $valueVarName = uniqid('_value_');
+        return new PHPParser_Node_Expr_Variable(
+            new PHPParser_Node_Expr_Concat(
+                new PHPParser_Node_Scalar_String($valueVarName),
+                new PHPParser_Node_Expr_BooleanNot(
+                    new PHPParser_Node_Expr_Assign(
+                        new PHPParser_Node_Expr_Variable($valueVarName),
+                        $node
+                    )
+                )
+            )
+        );
     }
 }

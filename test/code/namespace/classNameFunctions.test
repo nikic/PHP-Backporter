@@ -1,5 +1,10 @@
 namespace B {
-    class C { public $D = 'E'; }
+    class C {
+        public $D = 'E';
+        public function getClass() {
+            return get_class($this);
+        }
+    }
 
     $className = 'B\\C';
 
@@ -9,11 +14,18 @@ namespace B {
     if (property_exists('B\\C', 'D'))     echo 'OK';
     if (property_exists($className, 'D')) echo 'OK';
     if (property_exists(new \B\C, 'D'))   echo 'OK';
+
+    $class = new C;
+    if ('B\\C' === $class->getClass()) echo 'OK';
 }
 ---
 class B_C
 {
     public $D = 'E';
+    public function getClass()
+    {
+        return strtr(get_class($this), '_', '\\');
+    }
 }
 $className = 'B\\C';
 if (class_exists('B_C')) {
@@ -31,5 +43,9 @@ if (property_exists(is_string($className) ? strtr($className, '\\', '_') : $clas
 if (property_exists(is_string(($_value_%x = new B_C())) ? strtr($_value_%x, '\\', '_') : $_value_%x, 'D')) {
     echo 'OK';
 }
+$class = new B_C();
+if ('B\\C' === $class->getClass()) {
+    echo 'OK';
+}
 ---
-OKOKOKOKOK
+OKOKOKOKOKOK
