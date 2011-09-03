@@ -13,6 +13,21 @@ class _Closure
     }
 }
 
+// SPL Autoload overwrites
+class _Closure_SPL
+{
+    private $callback;
+
+    public function __construct($callback) {
+        $this->callback = $callback;
+    }
+
+    public function call($class) {
+        return call_user_func($this->callback, strtr($class, '_', '\\'));
+    }
+}
+
+// Reflection overwrites
 class _ReflectionClass extends ReflectionClass
 {
     public function getNamespaceName() {

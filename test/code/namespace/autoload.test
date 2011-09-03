@@ -3,20 +3,11 @@ namespace A {
     spl_autoload_call('A\\B\\C');
 }
 ---
-$_callback_%x = '_lambda_%x';
-spl_autoload_register(array(new _Closure_%x(array('_callback_%x' => $_callback_%x)), 'call'));
+spl_autoload_register(array(new _Closure_SPL('_lambda_%x'), 'call'));
 spl_autoload_call('A_B_C');
 function _lambda_%x($class)
 {
     echo $class;
-}
-class _Closure_%x extends _Closure
-{
-    public function call($class)
-    {
-        extract($this->uses, EXTR_REFS);
-        return call_user_func($_callback_%x, strtr($class, '_', '\\'));
-    }
 }
 ---
 A\B\C

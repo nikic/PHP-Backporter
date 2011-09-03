@@ -4,14 +4,10 @@
  * Converts closures (i.e. with use()s) into classes and inserts a callable array:
  *     $f = function($a) use($b) { return $a + $b; };
  * ->
- *     $f = array(new Closure_XYZ(array('b' => $b)), 'call');
+ *     $f = array(new _Closure_XYZ(array('b' => $b)), 'call');
  *     // ...
- *     class Closure_XYZ
+ *     class _Closure_XYZ extends _Closure
  *     {
- *         private $uses;
- *         public function __construct(array $uses) {
- *             $this->uses = $uses;
- *         }
  *         public function call($a) {
  *             extract($this->uses, EXTR_REFS);
  *             return $a + $b;
@@ -39,8 +35,8 @@ class PHPBackporter_Converter_Closure extends PHPParser_NodeVisitorAbstract
             $uses = array();
             foreach ($node->uses as $use) {
                 $uses[] = new PHPParser_Node_Expr_ArrayItem(
-                    new PHPParser_Node_Scalar_String($use->var),
                     new PHPParser_Node_Expr_Variable($use->var),
+                    new PHPParser_Node_Scalar_String($use->var),
                     $use->byRef
                 );
             }
@@ -80,7 +76,6 @@ class PHPBackporter_Converter_Closure extends PHPParser_NodeVisitorAbstract
             // return callable array
             $node = new PHPParser_Node_Expr_Array(array(
                 new PHPParser_Node_Expr_ArrayItem(
-                    null,
                     new PHPParser_Node_Expr_New(
                         new PHPParser_Node_Name($name),
                         array(
@@ -89,10 +84,21 @@ class PHPBackporter_Converter_Closure extends PHPParser_NodeVisitorAbstract
                     )
                 ),
                 new PHPParser_Node_Expr_ArrayItem(
-                    null,
                     new PHPParser_Node_Scalar_String('call')
                 )
             ));
+        } elseif ($node instanceof PHPParser_Node_Param
+                  && $node->type instanceof PHPParser_Node_Name
+                  && 'Closure' == $node->type
+        ) {
+            // drop Closure type hints
+            $node->type = null;
+        } elseif ($node instanceof PHPParser_Node_Expr_FuncCall
+                  && $node->name instanceof PHPParser_Node_Expr
+        ) {
+            // replace $f($a) with call_user_func($f, $a);
+            array_unshift($node->args, new PHPParser_Node_Expr_FuncCallArg($node->name));
+            $node->name = new PHPParser_Node_Name('call_user_func');
         }
     }
 

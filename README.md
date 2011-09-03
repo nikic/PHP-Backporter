@@ -15,8 +15,8 @@ Limitations
 
 ### Closures ###
 
-Closures can only be called using `call_user_func` / `call_user_func_array`, as they are represented
-by a callable array. Such arrays aren't directly callable before PHP 5.4.
+Closures are represented by a callable array, so calls of type $function() will be transformed
+into call_user_func(_array) calls. This can be a problem is functions expect arguments by reference.
 
 ### Namespaces ###
 

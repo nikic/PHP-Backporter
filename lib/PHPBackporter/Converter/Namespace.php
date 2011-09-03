@@ -53,10 +53,7 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
         'ReflectionObject' => '_ReflectionObject',
     );
 
-    public function beforeTraverse(&$node) {
-        $this->namespace = null;
-        $this->aliases   = array();
-
+    public function __construct() {
         $functions = get_defined_functions();
         $functions = $functions['internal'];
 
@@ -68,6 +65,11 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
             T_FUNCTION => array_change_key_case(array_fill_keys($functions, true), CASE_LOWER),
             T_CONST    => array_change_key_case(array_fill_keys($consts,    true), CASE_LOWER),
         );
+    }
+
+    public function beforeTraverse(&$node) {
+        $this->namespace = null;
+        $this->aliases   = array();
     }
 
     public function enterNode(PHPParser_NodeAbstract &$node) {
@@ -112,16 +114,15 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
                 }
             }
         } elseif ($node instanceof PHPParser_Node_Expr_StaticCall
-            || $node instanceof PHPParser_Node_Expr_StaticPropertyFetch
-            || $node instanceof PHPParser_Node_Expr_ClassConstFetch
-            || $node instanceof PHPParser_Node_Expr_New
-            || $node instanceof PHPParser_Node_Expr_Instanceof
+                  || $node instanceof PHPParser_Node_Expr_StaticPropertyFetch
+                  || $node instanceof PHPParser_Node_Expr_ClassConstFetch
+                  || $node instanceof PHPParser_Node_Expr_New
+                  || $node instanceof PHPParser_Node_Expr_Instanceof
         ) {
             $this->rewriteLookup($node->class, T_CLASS);
         } elseif ($node instanceof PHPParser_Node_Expr_FuncCall) {
             $this->rewriteLookup($node->name, T_FUNCTION);
-
-            return $this->rewriteSpecialFunctions($node);
+            $this->rewriteSpecialFunctions($node);
         } elseif ($node instanceof PHPParser_Node_Expr_ConstFetch) {
             $this->rewriteLookup($node->name, T_CONST);
         } elseif ($node instanceof PHPParser_Node_Param
@@ -213,9 +214,9 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
         }
 
         if ('define' == $node->name) {
-            return $this->rewriteDefineFunction($node);
+            $this->rewriteDefineFunction($node);
         } elseif ('spl_autoload_register' == $node->name) {
-            return $this->rewriteSplAutoloadRegisterFunction($node);
+            $this->rewriteSplAutoloadRegisterFunction($node);
         } else {
             if (isset(self::$classFuncs[(string) $node->name])) {
                 $argN = self::$classFuncs[(string) $node->name];
@@ -261,35 +262,19 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
             return;
         }
 
-        $callbackVarName = uniqid('_callback_');
-        $assignment = new PHPParser_Node_Expr_Assign(
-            new PHPParser_Node_Expr_Variable($callbackVarName),
-            $node->args[0]
-        );
-        $node->args[0] = new PHPParser_Node_Expr_LambdaFunc(
+        $node->args[0]->value = new PHPParser_Node_Expr_Array(
             array(
-                new PHPParser_Node_Stmt_Return(array(
-                    'expr' => new PHPParser_Node_Expr_FuncCall(
-                        new PHPParser_Node_Name('call_user_func'),
+                new PHPParser_Node_Expr_ArrayItem(
+                    new PHPParser_Node_Expr_New(
+                        new PHPParser_Node_Name('_Closure_SPL'),
                         array(
-                            new PHPParser_Node_Expr_FuncCallArg(
-                                new PHPParser_Node_Expr_Variable($callbackVarName)
-                            ),
-                            new PHPParser_Node_Expr_FuncCallArg(
-                                $this->createToNamespacedNode(
-                                    new PHPParser_Node_Expr_Variable('class'),
-                                    true
-                                )
-                            )
+                            new PHPParser_Node_Expr_FuncCallArg($node->args[0]->value)
                         )
                     )
-                ))
-            ),
-            array(new PHPParser_Node_Param('class')),
-            array(new PHPParser_Node_Expr_LambdaFuncUse($callbackVarName))
+                ),
+                new PHPParser_Node_Expr_ArrayItem(new PHPParser_Node_Scalar_String('call'))
+            )
         );
-
-        return array($assignment, $node);
     }
 
     protected function createFromNamespacedNode(PHPParser_Node_Expr $node, $safe = false) {

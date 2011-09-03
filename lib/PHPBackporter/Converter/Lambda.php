@@ -5,9 +5,9 @@
  * function name:
  *     $f = function($a, $b) { return $a + $b; };
  * ->
- *     $f = 'lambda_XYZ';
+ *     $f = '_lambda_XYZ';
  *     // ...
- *     function lambda_XYZ($a, $b) { return $a + $b; }
+ *     function _lambda_XYZ($a, $b) { return $a + $b; }
  */
 class PHPBackporter_Converter_Lambda extends PHPParser_NodeVisitorAbstract
 {
