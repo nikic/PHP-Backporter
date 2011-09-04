@@ -17,31 +17,10 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
      */
     protected $internals;
 
-    protected static $classFuncs = array(
-        'class_exists'            => 0,
-        'interface_exists'        => 0,
-        'is_a'                    => 1,
-        'is_subclass_of'          => 1,
-        'mysql_fetch_object'      => 1,
-        'simplexml_import_dom'    => 1,
-        'simplexml_load_file'     => 1,
-        'simplexml_load_string'   => 1,
-        'spl_autoload'            => 0,
-        'spl_autoload_call'       => 0,
-        'sqlite_fetch_object'     => 1,
-        'stream_filter_register'  => 1,
-        'stream_register_wrapper' => 1,
-        'stream_wrapper_register' => 1,
-    );
-
-    protected static $objectOrClassFuncs = array(
-        'get_class_vars'    => 0,
-        'get_class_methods' => 0,
-        'get_parent_class'  => 0,
-        'is_a'              => 0,
-        'is_subclass_of'    => 0,
-        'property_exists'   => 0,
-    );
+    /**
+     * @var PHPBackporter_ArgHandler Function argument handler
+     */
+    protected $argHandler;
 
     protected static $classReturnFuncs = array(
         'get_class'        => true,
@@ -54,6 +33,18 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
     );
 
     public function __construct() {
+        $functionDataParser = new PHPBackporter_FunctionDataParser;
+        $this->argHandler = new PHPBackporter_ArgHandler(
+            $functionDataParser->parse(file_get_contents('./function.data')),
+            array(
+                'define'              => array($this, 'handleDefineArg'),
+                'splAutoloadRegister' => array($this, 'handleSplAutoloadRegisterArg'),
+                'className'           => array($this, 'handleClassNameArg'),
+                'unsafeClassName'     => array($this, 'handleUnsafeClassNameArg'),
+                'const'               => array($this, 'handleConstArg')
+            )
+        );
+
         $functions = get_defined_functions();
         $functions = $functions['internal'];
 
@@ -120,6 +111,15 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
                   || $node instanceof PHPParser_Node_Expr_Instanceof
         ) {
             $this->rewriteLookup($node->class, T_CLASS);
+
+            // rewrite class argument to ReflectionClass
+            if ($node instanceof PHPParser_Node_Expr_New
+                && $node->class instanceof PHPParser_Node_Name
+                && '_ReflectionClass' == $node->class
+                && isset($node->args[0])
+            ) {
+                $node->args[0]->value = $this->createFromNamespacedNode($node->args[0]->value);
+            }
         } elseif ($node instanceof PHPParser_Node_Expr_FuncCall) {
             $this->rewriteLookup($node->name, T_FUNCTION);
             $this->rewriteSpecialFunctions($node);
@@ -213,67 +213,51 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
             return;
         }
 
-        if ('define' == $node->name) {
-            $this->rewriteDefineFunction($node);
-        } elseif ('spl_autoload_register' == $node->name) {
-            $this->rewriteSplAutoloadRegisterFunction($node);
-        } else {
-            if (isset(self::$classFuncs[(string) $node->name])) {
-                $argN = self::$classFuncs[(string) $node->name];
-                if (isset($node->args[$argN])) {
-                    $arg = $node->args[$argN];
-                    $arg->value = $this->createFromNamespacedNode($arg->value, true);
-                }
-            }
+        $this->argHandler->handle($node);
 
-            if (isset(self::$objectOrClassFuncs[(string) $node->name])) {
-                $argN = self::$objectOrClassFuncs[(string) $node->name];
-                if (isset($node->args[$argN])) {
-                    $arg = $node->args[$argN];
-                    $arg->value = $this->createFromNamespacedNode($arg->value, false);
-                }
-            }
-
-            if (isset(self::$classReturnFuncs[(string) $node->name])) {
-                $node = $this->createToNamespacedNode($node, true);
-            }
+        if (isset(self::$classReturnFuncs[(string) $node->name])) {
+            $node = $this->createToNamespacedNode($node, true);
         }
     }
 
-    // rewrites constants defined using the define() function
-    protected function rewriteDefineFunction(PHPParser_Node_Expr_FuncCall &$node) {
-        // missing first argument
-        if (count($node->args) < 2) {
-            throw new PHPParser_Error('define() is expecting at least two arguments', $node->getLine());
-        }
-
+    public function handleDefineArg(PHPParser_Node_Expr $node) {
         // dynamic definition TODO
-        if (!$node->args[0]->value instanceof PHPParser_Node_Scalar_String) {
-            return;
+        if (!$node instanceof PHPParser_Node_Scalar_String) {
+            return $node;
         }
 
-        $this->rewriteDefinition($node->args[0]->value->value);
+        $this->rewriteDefinition($node->value);
+        return $node;
     }
 
-    // spl_autoload_register callbacks need to be passed the class name
-    // with \ instead of _
-    protected function rewriteSplAutoloadRegisterFunction(PHPParser_Node_Expr_FuncCall &$node) {
-        if (!isset($node->args[0])) {
-            return;
-        }
-
-        $node->args[0]->value = new PHPParser_Node_Expr_Array(
+    public function handleSplAutoloadRegisterArg(PHPParser_Node_Expr $node) {
+        return new PHPParser_Node_Expr_Array(
             array(
                 new PHPParser_Node_Expr_ArrayItem(
                     new PHPParser_Node_Expr_New(
                         new PHPParser_Node_Name('_Closure_SPL'),
                         array(
-                            new PHPParser_Node_Expr_FuncCallArg($node->args[0]->value)
+                            new PHPParser_Node_Expr_FuncCallArg($node)
                         )
                     )
                 ),
                 new PHPParser_Node_Expr_ArrayItem(new PHPParser_Node_Scalar_String('call'))
             )
+        );
+    }
+
+    public function handleClassNameArg(PHPParser_Node_Expr $node) {
+        return $this->createFromNamespacedNode($node, true);
+    }
+
+    public function handleUnsafeClassNameArg(PHPParser_Node_Expr $node) {
+        return $this->createFromNamespacedNode($node, false);
+    }
+
+    public function handleConstArg(PHPParser_Node_Expr $node) {
+        return new PHPParser_Node_Expr_FuncCall(
+            new PHPParser_Node_Name('_prepareConst'),
+            array(new PHPParser_Node_Expr_FuncCallArg($node))
         );
     }
 

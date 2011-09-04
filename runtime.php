@@ -13,6 +13,19 @@ class _Closure
     }
 }
 
+function _prepareConst($name) {
+    $parts = explode('::', $name);
+    $count = count($parts);
+    if (1 === $count) {
+        return strtr($name, '\\', '_');
+    } elseif (2 === $count) {
+        return strtr($parts[0], '\\', '_') . '::' . $parts[1];
+    } else {
+        // invalid
+        return $name;
+    }
+}
+
 // SPL Autoload overwrites
 class _Closure_SPL
 {
@@ -30,10 +43,14 @@ class _Closure_SPL
 // Reflection overwrites
 class _ReflectionClass extends ReflectionClass
 {
+    public function getName() {
+        return strtr(parent::getName(), '_', '\\');
+    }
+
     public function getNamespaceName() {
         $name = $this->getName();
-        if (false !== ($pos = strrpos($name, '_'))) {
-            return strtr(substr($name, 0, $pos), '_', '\\');
+        if (false !== ($pos = strrpos($name, '\\'))) {
+            return substr($name, 0, $pos);
         } else {
             return null;
         }
@@ -42,10 +59,14 @@ class _ReflectionClass extends ReflectionClass
 
 class _ReflectionObject extends ReflectionObject
 {
+    public function getName() {
+        return strtr(parent::getName(), '_', '\\');
+    }
+
     public function getNamespaceName() {
         $name = $this->getName();
-        if (false !== ($pos = strrpos($name, '_'))) {
-            return strtr(substr($name, 0, $pos), '_', '\\');
+        if (false !== ($pos = strrpos($name, '\\'))) {
+            return substr($name, 0, $pos);
         } else {
             return null;
         }

@@ -6,15 +6,11 @@ class PHPBackporter_Tests_CodeTest extends PHPUnit_Framework_TestCase
      * @dataProvider provideTestConversion
      */
     public function testConversion($originalCode, $expectedCode, $expectedOutput) {
-        $parser        = new PHPParser_Parser;
-        $traverser     = new PHPParser_NodeTraverser;
-        $prettyPrinter = new PHPParser_PrettyPrinter_Zend;
+        $factory = new PHPBackporter_Factory;
 
-        $traverser->addVisitor(new PHPBackporter_Converter_Dir);
-        $traverser->addVisitor(new PHPBackporter_Converter_Const);
-        $traverser->addVisitor(new PHPBackporter_Converter_Lambda);
-        $traverser->addVisitor(new PHPBackporter_Converter_Closure);
-        $traverser->addVisitor(new PHPBackporter_Converter_Namespace);
+        $parser        = new PHPParser_Parser;
+        $traverser     = $factory->getTraverser();
+        $prettyPrinter = new PHPParser_PrettyPrinter_Zend;
 
         $stmts = $parser->parse(new PHPParser_Lexer('<?php ' . $originalCode));
 

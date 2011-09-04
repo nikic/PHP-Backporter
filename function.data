@@ -1,0 +1,37 @@
+# class name argument
+[className]
+class_exists           : 0
+interface_exists       : 0
+is_a                   : 1
+is_subclass_of         : 1
+mysql_fetch_object     : 1
+simplexml_import_dom   : 1
+simplexml_load_file    : 1
+simplexml_load_string  : 1
+spl_autoload           : 0
+spl_autoload_call      : 0
+sqlite_fetch_object    : 1
+stream_filter_register : 1
+stream_register_wrapper: 1
+stream_wrapper_register: 1
+
+# class name or non-string argument ("unsafe")
+[unsafeClassName]
+get_class_vars   : 0
+get_class_methods: 0
+get_parent_class : 0
+is_a             : 0
+is_subclass_of   : 0
+property_exists  : 0
+
+# constant name argument
+[const]
+constant: 0
+defined : 0
+
+# some functions we deal with specially
+[define]
+define: 0
+
+[splAutoloadRegister]
+spl_autoload_register: 0
