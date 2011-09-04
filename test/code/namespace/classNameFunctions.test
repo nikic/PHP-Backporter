@@ -19,31 +19,31 @@ namespace B {
     if ('B\\C' === $class->getClass()) echo 'OK';
 }
 ---
-class B_C
+class B__C
 {
     public $D = 'E';
     public function getClass()
     {
-        return strtr(get_class($this), '_', '\\');
+        return str_replace('__', '\\', get_class($this));
     }
 }
 $className = 'B\\C';
-if (class_exists('B_C')) {
+if (class_exists('B__C')) {
     echo 'OK';
 }
-if (class_exists(strtr($className, '\\', '_'))) {
+if (class_exists(str_replace('\\', '__', $className))) {
     echo 'OK';
 }
-if (property_exists('B_C', 'D')) {
+if (property_exists('B__C', 'D')) {
     echo 'OK';
 }
-if (property_exists(is_string($className) ? strtr($className, '\\', '_') : $className, 'D')) {
+if (property_exists(is_string($className) ? str_replace('\\', '__', $className) : $className, 'D')) {
     echo 'OK';
 }
-if (property_exists(is_string(($_value_%x = new B_C())) ? strtr($_value_%x, '\\', '_') : $_value_%x, 'D')) {
+if (property_exists(is_string(($_value_%x = new B__C())) ? str_replace('\\', '__', $_value_%x) : $_value_%x, 'D')) {
     echo 'OK';
 }
-$class = new B_C();
+$class = new B__C();
 if ('B\\C' === $class->getClass()) {
     echo 'OK';
 }

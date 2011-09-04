@@ -132,7 +132,7 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
         // rewrite __NAMESPACE__
         } elseif ($node instanceof PHPParser_Node_Scalar_NSConst) {
             $node = new PHPParser_Node_Scalar_String(
-                null !== $this->namespace ? $this->namespace->toString('_') : ''
+                null !== $this->namespace ? $this->namespace->toString('__') : ''
             );
         // remove use statements
         } elseif ($node instanceof PHPParser_Node_Stmt_Use) {
@@ -145,7 +145,7 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
 
     protected function rewriteDefinition(&$name) {
         if (null !== $this->namespace) {
-            $name = $this->namespace->toString('_') . '_' . $name;
+            $name = $this->namespace->toString('__') . '__' . $name;
         }
     }
 
@@ -177,7 +177,7 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
         }
 
         // finally just replace the namespace separators with underscores
-        $name->set($name->toString('_'));
+        $name->set($name->toString('__'));
         $name->type = PHPParser_Node_Name::NORMAL;
 
         // and rewrite some special classes
@@ -203,7 +203,7 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
         }
 
         // finally just replace the namespace separators with underscores
-        $name->set($name->toString('_'));
+        $name->set($name->toString('__'));
         $name->type = PHPParser_Node_Name::NORMAL;
     }
 
@@ -265,17 +265,17 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
         // don't clutter code with functions if we can replace directly
         if ($node instanceof PHPParser_Node_Scalar_String) {
             return new PHPParser_Node_Scalar_String(
-                strtr($node->value, '\\', '_')
+                str_replace('\\', '__', $node->value)
             );
         }
 
         if ($safe) {
             return new PHPParser_Node_Expr_FuncCall(
-                new PHPParser_Node_Name('strtr'),
+                new PHPParser_Node_Name('str_replace'),
                 array(
-                    new PHPParser_Node_Expr_FuncCallArg($node),
                     new PHPParser_Node_Expr_FuncCallArg(new PHPParser_Node_Scalar_String('\\')),
-                    new PHPParser_Node_Expr_FuncCallArg(new PHPParser_Node_Scalar_String('_'))
+                    new PHPParser_Node_Expr_FuncCallArg(new PHPParser_Node_Scalar_String('__')),
+                    new PHPParser_Node_Expr_FuncCallArg($node)
                 )
             );
         } else {
@@ -296,17 +296,17 @@ class PHPBackporter_Converter_Namespace extends PHPParser_NodeVisitorAbstract
         // don't clutter code with functions if we can replace directly
         if ($node instanceof PHPParser_Node_Scalar_String) {
             return new PHPParser_Node_Scalar_String(
-                strtr($node->value, '_', '\\')
+                str_replace('__', '\\', $node->value)
             );
         }
 
         if ($safe) {
             return new PHPParser_Node_Expr_FuncCall(
-                new PHPParser_Node_Name('strtr'),
+                new PHPParser_Node_Name('str_replace'),
                 array(
-                    new PHPParser_Node_Expr_FuncCallArg($node),
-                    new PHPParser_Node_Expr_FuncCallArg(new PHPParser_Node_Scalar_String('_')),
-                    new PHPParser_Node_Expr_FuncCallArg(new PHPParser_Node_Scalar_String('\\'))
+                    new PHPParser_Node_Expr_FuncCallArg(new PHPParser_Node_Scalar_String('__')),
+                    new PHPParser_Node_Expr_FuncCallArg(new PHPParser_Node_Scalar_String('\\')),
+                    new PHPParser_Node_Expr_FuncCallArg($node)
                 )
             );
         } else {

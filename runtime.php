@@ -4,25 +4,25 @@ function _is_string($value) {
     return is_string($value) || (is_object($value) && method_exists($value, '__toString'));
 }
 
+function _prepareConst($name) {
+    $parts = explode('::', $name);
+    $count = count($parts);
+    if (1 === $count) {
+        return str_replace('\\', '__', $name);
+    } elseif (2 === $count) {
+        return str_replace('\\', '__', $parts[0]) . '::' . $parts[1];
+    } else {
+        // invalid
+        return $name;
+    }
+}
+
 class _Closure
 {
     protected $uses;
 
     public function __construct(array $uses) {
         $this->uses = $uses;
-    }
-}
-
-function _prepareConst($name) {
-    $parts = explode('::', $name);
-    $count = count($parts);
-    if (1 === $count) {
-        return strtr($name, '\\', '_');
-    } elseif (2 === $count) {
-        return strtr($parts[0], '\\', '_') . '::' . $parts[1];
-    } else {
-        // invalid
-        return $name;
     }
 }
 
@@ -36,7 +36,7 @@ class _Closure_SPL
     }
 
     public function call($class) {
-        return call_user_func($this->callback, strtr($class, '_', '\\'));
+        return call_user_func($this->callback, str_replace('__', '\\', $class));
     }
 }
 
@@ -44,7 +44,7 @@ class _Closure_SPL
 class _ReflectionClass extends ReflectionClass
 {
     public function getName() {
-        return strtr(parent::getName(), '_', '\\');
+        return str_replace('__', '\\', parent::getName());
     }
 
     public function getNamespaceName() {
@@ -60,7 +60,7 @@ class _ReflectionClass extends ReflectionClass
 class _ReflectionObject extends ReflectionObject
 {
     public function getName() {
-        return strtr(parent::getName(), '_', '\\');
+        return str_replace('__', '\\', parent::getName());
     }
 
     public function getNamespaceName() {

@@ -20,28 +20,28 @@ namespace A {
     echo GHI, "\n";
 }
 ---
-class A_B
+class A__B
 {
     public static function call()
     {
         return 'Foo Bar';
     }
 }
-function A_C()
+function A__C()
 {
     return 'Bar Foo';
 }
-define('A_ABC', 'DEF');
-define('A_GHI', 'JKL');
+define('A__ABC', 'DEF');
+define('A__GHI', 'JKL');
 echo 'A', '
 ';
-echo A_B::call(), '
+echo A__B::call(), '
 ';
-echo A_C(), '
+echo A__C(), '
 ';
-echo A_ABC, '
+echo A__ABC, '
 ';
-echo A_GHI, '
+echo A__GHI, '
 ';
 ---
 A

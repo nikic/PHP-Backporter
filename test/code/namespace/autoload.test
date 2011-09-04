@@ -4,7 +4,7 @@ namespace A {
 }
 ---
 spl_autoload_register(array(new _Closure_SPL('_lambda_%x'), 'call'));
-spl_autoload_call('A_B_C');
+spl_autoload_call('A__B__C');
 function _lambda_%x($class)
 {
     echo $class;
